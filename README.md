@@ -5,7 +5,13 @@ This HelloID Service Automation Delegated Form provides Exchange On-Premise Dist
  2. Select the distribution group to manage
  3. Manage members of the distribution group (Add/Remove)
  4. Confirm the changes
- 
+
+## Versioning
+| Version | Description | Date |
+| - | - | - |
+| 1.0.1   | Added version number and updated all-in-one script | 2021/11/16  |
+| 1.0.0   | Initial release | 2021/04/29  |
+
 <!-- TABLE OF CONTENTS -->
 ## Table of Contents
 * [Description](#description)
@@ -50,5 +56,8 @@ This Powershell data source runs an Exchange query to list available mailusers a
 ### Delegated form task 'Exchange-on-premise-distribution-group-update-members'
 This delegated form task will update the memberships of the distribution group in Exchange.
 
-# HelloID Docs
+## Getting help
+_If you need help, feel free to ask questions on our [forum](https://forum.helloid.com/forum/helloid-connectors/service-automation/590-helloid-sa-exchange-on-premises-manage-distribution-group-memberships)_
+
+## HelloID Docs
 The official HelloID documentation can be found at: https://docs.helloid.com/
