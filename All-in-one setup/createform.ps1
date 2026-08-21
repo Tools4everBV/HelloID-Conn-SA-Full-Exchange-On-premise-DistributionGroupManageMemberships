@@ -6,8 +6,8 @@
 $portalUrl = "https://CUSTOMER.helloid.com"
 $apiKey = "API_KEY"
 $apiSecret = "API_SECRET"
-$delegatedFormAccessGroupNames = @("Users") #Only unique names are supported. Groups must exist!
-$delegatedFormCategories = @("Exchange On-Premise") #Only unique names are supported. Categories will be created if not exists
+$delegatedFormAccessGroupNames = @("") #Only unique names are supported. Groups must exist!
+$delegatedFormCategories = @("Exchange On-Premises") #Only unique names are supported. Categories will be created if not exists
 $script:debugLogging = $false #Default value: $false. If $true, the HelloID resource GUIDs will be shown in the logging
 $script:duplicateForm = $false #Default value: $false. If $true, the HelloID resource names will be changed to import a duplicate Form
 $script:duplicateFormSuffix = "_tmp" #the suffix will be added to all HelloID resource names to generate a duplicate form with different resource names
@@ -20,22 +20,24 @@ $globalHelloIDVariables = [System.Collections.Generic.List[object]]@();
 $tmpName = @'
 ExchangeConnectionUri
 '@ 
-$tmpValue = "" 
-$globalHelloIDVariables.Add([PSCustomObject]@{name = $tmpName; value = $tmpValue; secret = "False"});
+$tmpValue = @'
+'@ 
+$globalHelloIDVariables.Add([PSCustomObject]@{name = $tmpName; value = $tmpValue; secret = "False" });
 
 #Global variable #2 >> ExchangeAdminPassword
 $tmpName = @'
 ExchangeAdminPassword
 '@ 
-$tmpValue = ""  
-$globalHelloIDVariables.Add([PSCustomObject]@{name = $tmpName; value = $tmpValue; secret = "False"});
+$tmpValue = "" 
+$globalHelloIDVariables.Add([PSCustomObject]@{name = $tmpName; value = $tmpValue; secret = "True" });
 
 #Global variable #3 >> ExchangeAdminUsername
 $tmpName = @'
 ExchangeAdminUsername
 '@ 
-$tmpValue = ""  
-$globalHelloIDVariables.Add([PSCustomObject]@{name = $tmpName; value = $tmpValue; secret = "False"});
+$tmpValue = @'
+'@ 
+$globalHelloIDVariables.Add([PSCustomObject]@{name = $tmpName; value = $tmpValue; secret = "False" });
 
 
 #make sure write-information logging is visual
@@ -43,15 +45,16 @@ $InformationPreference = "continue"
 
 # Check for prefilled API Authorization header
 if (-not [string]::IsNullOrEmpty($portalApiBasic)) {
-    $script:headers = @{"authorization" = $portalApiBasic}
+    $script:headers = @{"authorization" = $portalApiBasic }
     Write-Information "Using prefilled API credentials"
-} else {
+}
+else {
     # Create authorization headers with HelloID API key
     $pair = "$apiKey" + ":" + "$apiSecret"
     $bytes = [System.Text.Encoding]::ASCII.GetBytes($pair)
     $base64 = [System.Convert]::ToBase64String($bytes)
     $key = "Basic $base64"
-    $script:headers = @{"authorization" = $Key}
+    $script:headers = @{"authorization" = $Key }
     Write-Information "Using manual API credentials"
 }
 
@@ -59,7 +62,8 @@ if (-not [string]::IsNullOrEmpty($portalApiBasic)) {
 if (-not [string]::IsNullOrEmpty($portalBaseUrl)) {
     $script:PortalBaseUrl = $portalBaseUrl
     Write-Information "Using prefilled PortalURL: $script:PortalBaseUrl"
-} else {
+}
+else {
     $script:PortalBaseUrl = $portalUrl
     Write-Information "Using manual PortalURL: $script:PortalBaseUrl"
 }
@@ -70,12 +74,13 @@ $script:PortalBaseUrl = $script:PortalBaseUrl.trim("/") + "/"
 # Make sure to reveive an empty array using PowerShell Core
 function ConvertFrom-Json-WithEmptyArray([string]$jsonString) {
     # Running in PowerShell Core?
-    if($IsCoreCLR -eq $true){
+    if ($IsCoreCLR -eq $true) {
         $r = [Object[]]($jsonString | ConvertFrom-Json -NoEnumerate)
-        return ,$r  # Force return value to be an array using a comma
-    } else {
+        return , $r  # Force return value to be an array using a comma
+    }
+    else {
         $r = [Object[]]($jsonString | ConvertFrom-Json)
-        return ,$r  # Force return value to be an array using a comma
+        return , $r  # Force return value to be an array using a comma
     }
 }
 
@@ -91,7 +96,7 @@ function Invoke-HelloIDGlobalVariable {
     try {
         $uri = ($script:PortalBaseUrl + "api/v1/automation/variables/named/$Name")
         $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false
-    
+
         if ([string]::IsNullOrEmpty($response.automationVariableGuid)) {
             #Create Variable
             $body = @{
@@ -101,17 +106,19 @@ function Invoke-HelloIDGlobalVariable {
                 ItemType = 0;
             }    
             $body = ConvertTo-Json -InputObject $body -Depth 100
-    
+
             $uri = ($script:PortalBaseUrl + "api/v1/automation/variable")
             $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false -Body $body
             $variableGuid = $response.automationVariableGuid
 
             Write-Information "Variable '$Name' created$(if ($script:debugLogging -eq $true) { ": " + $variableGuid })"
-        } else {
+        }
+        else {
             $variableGuid = $response.automationVariableGuid
             Write-Warning "Variable '$Name' already exists$(if ($script:debugLogging -eq $true) { ": " + $variableGuid })"
         }
-    } catch {
+    }
+    catch {
         Write-Error "Variable '$Name', message: $_"
     }
 }
@@ -127,15 +134,15 @@ function Invoke-HelloIDAutomationTask {
         [parameter()][String][AllowEmptyString()]$ForceCreateTask,
         [parameter(Mandatory)][Ref]$returnObject
     )
-    
+
     $TaskName = $TaskName + $(if ($script:duplicateForm -eq $true) { $script:duplicateFormSuffix })
 
     try {
-        $uri = ($script:PortalBaseUrl +"api/v1/automationtasks?search=$TaskName&container=$AutomationContainer")
+        $uri = ($script:PortalBaseUrl + "api/v1/automationtasks?search=$TaskName&container=$AutomationContainer")
         $responseRaw = (Invoke-RestMethod -Method Get -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false) 
-        $response = $responseRaw | Where-Object -filter {$_.name -eq $TaskName}
-    
-        if([string]::IsNullOrEmpty($response.automationTaskGuid) -or $ForceCreateTask -eq $true) {
+        $response = $responseRaw | Where-Object -filter { $_.name -eq $TaskName }
+
+        if ([string]::IsNullOrEmpty($response.automationTaskGuid) -or $ForceCreateTask -eq $true) {
             #Create Task
 
             $body = @{
@@ -147,18 +154,20 @@ function Invoke-HelloIDAutomationTask {
                 variables           = (ConvertFrom-Json-WithEmptyArray($Variables));
             }
             $body = ConvertTo-Json -InputObject $body -Depth 100
-    
-            $uri = ($script:PortalBaseUrl +"api/v1/automationtasks/powershell")
+
+            $uri = ($script:PortalBaseUrl + "api/v1/automationtasks/powershell")
             $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false -Body $body
             $taskGuid = $response.automationTaskGuid
 
             Write-Information "Powershell task '$TaskName' created$(if ($script:debugLogging -eq $true) { ": " + $taskGuid })"
-        } else {
+        }
+        else {
             #Get TaskGUID
             $taskGuid = $response.automationTaskGuid
             Write-Warning "Powershell task '$TaskName' already exists$(if ($script:debugLogging -eq $true) { ": " + $taskGuid })"
         }
-    } catch {
+    }
+    catch {
         Write-Error "Powershell task '$TaskName', message: $_"
     }
 
@@ -174,23 +183,24 @@ function Invoke-HelloIDDatasource {
         [parameter()][String][AllowEmptyString()]$DatasourcePsScript,        
         [parameter()][String][AllowEmptyString()]$DatasourceInput,
         [parameter()][String][AllowEmptyString()]$AutomationTaskGuid,
+        [parameter()][String][AllowEmptyString()]$DatasourceRunInCloud,
         [parameter(Mandatory)][Ref]$returnObject
     )
 
     $DatasourceName = $DatasourceName + $(if ($script:duplicateForm -eq $true) { $script:duplicateFormSuffix })
 
-    $datasourceTypeName = switch($DatasourceType) { 
-        "1" { "Native data source"; break} 
-        "2" { "Static data source"; break} 
-        "3" { "Task data source"; break} 
-        "4" { "Powershell data source"; break}
+    $datasourceTypeName = switch ($DatasourceType) { 
+        "1" { "Native data source"; break } 
+        "2" { "Static data source"; break } 
+        "3" { "Task data source"; break } 
+        "4" { "Powershell data source"; break }
     }
-    
+
     try {
-        $uri = ($script:PortalBaseUrl +"api/v1/datasource/named/$DatasourceName")
+        $uri = ($script:PortalBaseUrl + "api/v1/datasource/named/$DatasourceName")
         $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false
-      
-        if([string]::IsNullOrEmpty($response.dataSourceGUID)) {
+    
+        if ([string]::IsNullOrEmpty($response.dataSourceGUID)) {
             #Create DataSource
             $body = @{
                 name               = $DatasourceName;
@@ -200,21 +210,24 @@ function Invoke-HelloIDDatasource {
                 value              = (ConvertFrom-Json-WithEmptyArray($DatasourceStaticValue));
                 script             = $DatasourcePsScript;
                 input              = (ConvertFrom-Json-WithEmptyArray($DatasourceInput));
+                runInCloud         = $DatasourceRunInCloud;
             }
             $body = ConvertTo-Json -InputObject $body -Depth 100
-      
-            $uri = ($script:PortalBaseUrl +"api/v1/datasource")
+    
+            $uri = ($script:PortalBaseUrl + "api/v1/datasource")
             $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false -Body $body
-              
+            
             $datasourceGuid = $response.dataSourceGUID
             Write-Information "$datasourceTypeName '$DatasourceName' created$(if ($script:debugLogging -eq $true) { ": " + $datasourceGuid })"
-        } else {
+        }
+        else {
             #Get DatasourceGUID
             $datasourceGuid = $response.dataSourceGUID
             Write-Warning "$datasourceTypeName '$DatasourceName' already exists$(if ($script:debugLogging -eq $true) { ": " + $datasourceGuid })"
         }
-    } catch {
-      Write-Error "$datasourceTypeName '$DatasourceName', message: $_"
+    }
+    catch {
+        Write-Error "$datasourceTypeName '$DatasourceName', message: $_"
     }
 
     $returnObject.Value = $datasourceGuid
@@ -226,35 +239,38 @@ function Invoke-HelloIDDynamicForm {
         [parameter(Mandatory)][String]$FormSchema,
         [parameter(Mandatory)][Ref]$returnObject
     )
-    
+
     $FormName = $FormName + $(if ($script:duplicateForm -eq $true) { $script:duplicateFormSuffix })
 
     try {
         try {
-            $uri = ($script:PortalBaseUrl +"api/v1/forms/$FormName")
+            $uri = ($script:PortalBaseUrl + "api/v1/forms/$FormName")
             $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false
-        } catch {
+        }
+        catch {
             $response = $null
         }
-    
-        if(([string]::IsNullOrEmpty($response.dynamicFormGUID)) -or ($response.isUpdated -eq $true)) {
+
+        if (([string]::IsNullOrEmpty($response.dynamicFormGUID)) -or ($response.isUpdated -eq $true)) {
             #Create Dynamic form
             $body = @{
                 Name       = $FormName;
                 FormSchema = (ConvertFrom-Json-WithEmptyArray($FormSchema));
             }
             $body = ConvertTo-Json -InputObject $body -Depth 100
-    
-            $uri = ($script:PortalBaseUrl +"api/v1/forms")
+
+            $uri = ($script:PortalBaseUrl + "api/v1/forms")
             $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false -Body $body
-    
+
             $formGuid = $response.dynamicFormGUID
             Write-Information "Dynamic form '$formName' created$(if ($script:debugLogging -eq $true) { ": " + $formGuid })"
-        } else {
+        }
+        else {
             $formGuid = $response.dynamicFormGUID
             Write-Warning "Dynamic form '$FormName' already exists$(if ($script:debugLogging -eq $true) { ": " + $formGuid })"
         }
-    } catch {
+    }
+    catch {
         Write-Error "Dynamic form '$FormName', message: $_"
     }
 
@@ -278,13 +294,14 @@ function Invoke-HelloIDDelegatedForm {
 
     try {
         try {
-            $uri = ($script:PortalBaseUrl +"api/v1/delegatedforms/$DelegatedFormName")
+            $uri = ($script:PortalBaseUrl + "api/v1/delegatedforms/$DelegatedFormName")
             $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false
-        } catch {
+        }
+        catch {
             $response = $null
         }
-    
-        if([string]::IsNullOrEmpty($response.delegatedFormGUID)) {
+
+        if ([string]::IsNullOrEmpty($response.delegatedFormGUID)) {
             #Create DelegatedForm
             $body = @{
                 name            = $DelegatedFormName;
@@ -294,30 +311,32 @@ function Invoke-HelloIDDelegatedForm {
                 faIcon          = $FaIcon;
                 task            = ConvertFrom-Json -inputObject $task;
             }
-            if(-not[String]::IsNullOrEmpty($AccessGroups)) { 
+            if (-not[String]::IsNullOrEmpty($AccessGroups)) { 
                 $body += @{
-                    accessGroups    = (ConvertFrom-Json-WithEmptyArray($AccessGroups));
+                    accessGroups = (ConvertFrom-Json-WithEmptyArray($AccessGroups));
                 }
             }
             $body = ConvertTo-Json -InputObject $body -Depth 100
-    
-            $uri = ($script:PortalBaseUrl +"api/v1/delegatedforms")
+
+            $uri = ($script:PortalBaseUrl + "api/v1/delegatedforms")
             $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false -Body $body
-    
+
             $delegatedFormGuid = $response.delegatedFormGUID
             Write-Information "Delegated form '$DelegatedFormName' created$(if ($script:debugLogging -eq $true) { ": " + $delegatedFormGuid })"
             $delegatedFormCreated = $true
 
             $bodyCategories = $Categories
-            $uri = ($script:PortalBaseUrl +"api/v1/delegatedforms/$delegatedFormGuid/categories")
+            $uri = ($script:PortalBaseUrl + "api/v1/delegatedforms/$delegatedFormGuid/categories")
             $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false -Body $bodyCategories
             Write-Information "Delegated form '$DelegatedFormName' updated with categories"
-        } else {
+        }
+        else {
             #Get delegatedFormGUID
             $delegatedFormGuid = $response.delegatedFormGUID
             Write-Warning "Delegated form '$DelegatedFormName' already exists$(if ($script:debugLogging -eq $true) { ": " + $delegatedFormGuid })"
         }
-    } catch {
+    }
+    catch {
         Write-Error "Delegated form '$DelegatedFormName', message: $_"
     }
 
@@ -325,312 +344,452 @@ function Invoke-HelloIDDelegatedForm {
     $returnObject.value.created = $delegatedFormCreated
 }
 
-
 <# Begin: HelloID Global Variables #>
 foreach ($item in $globalHelloIDVariables) {
-	Invoke-HelloIDGlobalVariable -Name $item.name -Value $item.value -Secret $item.secret 
+    Invoke-HelloIDGlobalVariable -Name $item.name -Value $item.value -Secret $item.secret 
 }
 <# End: HelloID Global Variables #>
 
 
 <# Begin: HelloID Data sources #>
-<# Begin: DataSource "Exchange-user-generate-table-distributiongroups-manage-memberships" #>
+<# Begin: DataSource "exchange-on-premises-distribution-group-manage-memberships | Exchange-On-Premises-Get-All-Users" #>
 $tmpPsScript = @'
-<#----- Exchange On-Premises: Start -----#>
-# Connect to Exchange
-try{
-    $adminSecurePassword = ConvertTo-SecureString -String "$ExchangeAdminPassword" -AsPlainText -Force
-    $adminCredential = [System.Management.Automation.PSCredential]::new($ExchangeAdminUsername,$adminSecurePassword)
-    $sessionOption = New-PSSessionOption -SkipCACheck -SkipCNCheck #-SkipRevocationCheck
-    $exchangeSession = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri $exchangeConnectionUri -Credential $adminCredential -SessionOption $sessionOption -Authentication Default -ErrorAction Stop 
-    #-AllowRedirection
-    $null = Import-PSSession $exchangeSession -DisableNameChecking -AllowClobber
-    Write-Information -Message "Successfully connected to Exchange using the URI [$exchangeConnectionUri]"
-} catch {
-    Write-Information -Message "Error connecting to Exchange using the URI [$exchangeConnectionUri]"
-    Write-Error -Message "Error at line: $($_.InvocationInfo.ScriptLineNumber - 79): $($_.Exception.Message)"
-    if($debug -eq $true){
-        Write-Error -Message "$($_.Exception)"
-    }
-    Write-Information -Message "Failed to connect to Exchange using the URI [$exchangeConnectionUri]"
-    throw $_
-}
+# Build filter
+# Check for mailboxes matching the displayName, mailNickname (alias), primary email or proxy addresses
+# This will check ALL users (enabled and disabled)
+$filter = "RecipientType -eq 'UserMailbox'"
+
+# Global variables
+# Outcommented as these are set from Global Variables
+# $ExchangeConnectionUri = ""
+# $ExchangeAdminUsername = ""
+# $ExchangeAdminPassword = ""
+
+# Fixed values
+# Properties to select - Select only needed properties to limit memory usage and speed up processing
+$propertiesToSelect = @(
+    "Guid"
+    , "DisplayName"
+    , "PrimarySmtpAddress"    
+)
+
+# Enable TLS1.2
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
+
+# Set debug logging
+$VerbosePreference = "SilentlyContinue"
+$InformationPreference = "Continue"
+$WarningPreference = "Continue"
+
+#region functions
+#endregion functions
 
 try {
-        
-        $mailUsers = Get-Mailbox -RecipientTypeDetails UserMailbox -ResultSize:Unlimited | Select-Object DisplayName, SamAccountName
-        $mailContacts = Get-MailContact  | Select-Object @{N='DisplayName';E={$_.DisplayName + " (contact)"}}, @{N='SamAccountName';E={$_.Alias}}
+    # Create credentials
+    $actionMessage = "creating credentials object"
+    
+    $securePassword = ConvertTo-SecureString -String $ExchangeAdminPassword -AsPlainText -Force
+    $credential = [System.Management.Automation.PSCredential]::new($ExchangeAdminUsername, $securePassword)
 
-        $mailboxes = $mailUsers + $mailContacts
+    # Connect to Exchange On-Premises
+    # Docs: https://learn.microsoft.com/en-us/powershell/exchange/connect-to-exchange-servers-using-remote-powershell
+    $actionMessage = "connecting to Exchange On-Premises using URI [$ExchangeConnectionUri]"
 
-        $mailboxes = $mailboxes | Sort-Object -Property DisplayName
-        $resultCount = @($mailboxes).Count
-        Write-Information "Result count: $resultCount"
-        if($resultCount -gt 0)
-        {
-            foreach($mailbox in $mailboxes){
-                $returnObject = @{
-                    name=$mailbox.DisplayName  + " [" + $mailbox.SamAccountName + "]"; 
-                    sAMAccountName=$mailbox.SamAccountName
-                }
-                Write-Output $returnObject
-            }
-        }
-
-        <#$mailContacts = Get-MailContact  | Select-Object DisplayName, SamAccountName
-
-        $mailContacts = $mailContacts | Sort-Object -Property DisplayName
-        $resultCount = @($mailContacts).Count
-        Write-Information "Result count: $resultCount"
-        if($resultCount -gt 0)
-        {
-            foreach($mailContact in $mailContacts){
-                $returnObject = @{
-                    name=$mailContact.DisplayName  + " [" + $mailContact.Alias + " - contact]"; 
-                    sAMAccountName=$mailContact.Alias
-                }
-                Write-Output $returnObject
-            }
-        }#>
+    $sessionOptionParams = @{
+        SkipCACheck         = $false
+        SkipCNCheck         = $false
+        SkipRevocationCheck = $false
     }
-  catch {
-    $msg = "Error searching AD user [$searchValue]. Error: $($_.Exception.Message)"
-    Write-Error $msg
-}
 
-# Disconnect from Exchange
-try{
-    Remove-PsSession -Session $exchangeSession -Confirm:$false -ErrorAction Stop
-    Write-Information -Message "Successfully disconnected from Exchange"
+    $sessionOption = New-PSSessionOption @sessionOptionParams
+
+    $sessionParams = @{
+        Authentication    = 'Default'
+        ConfigurationName = 'Microsoft.Exchange'
+        ConnectionUri     = $ExchangeConnectionUri
+        Credential        = $credential
+        SessionOption     = $sessionOption
+        ErrorAction       = "Stop"
+    }
+
+    $exchangeSession = New-PSSession @sessionParams
+    $null = Import-PSSession -Session $exchangeSession -DisableNameChecking -AllowClobber -CommandName "Get-Mailbox" -ErrorAction Stop
+
+     # Get Mailboxes
+    # Docs: https://learn.microsoft.com/en-us/powershell/module/exchange/get-mailbox
+    $actionMessage = "querying shared mailboxes that match filter [$($filter)]"
+    $getMailboxesSplatParams = @{
+        Filter      = $filter
+        ResultSize  = "Unlimited"
+        ErrorAction = 'Stop'
+    }
+
+    $mailboxes = Get-Mailbox @getMailboxesSplatParams | Select-Object -Property $propertiesToSelect
+    Write-Information "Queried shared mailboxes that match filter [$($filter)]. Result count: $(($mailboxes | Measure-Object).Count)"
+
+    # Sort and send results to HelloID
+    $actionMessage = "sending results to HelloID"
+    $mailboxes | Sort-Object -Property DisplayName | ForEach-Object {
+        Write-Output $_
+    }   
 } catch {
-    Write-Error -Message "Error disconnecting from Exchange"
-    Write-Error -Message "Error at line: $($_.InvocationInfo.ScriptLineNumber - 79): $($_.Exception.Message)"
-    if($debug -eq $true){
-        Write-Error -Message "$($_.Exception)"
-    }    
-    Write-Error -Message "Failed to disconnect from Exchange"
-    throw $_
+    $ex = $PSItem
+    if (-not [string]::IsNullOrEmpty($ex.Exception.Message)) {
+        $warningMessage = "Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)"
+        $auditMessage = "Error $($actionMessage). Error: $($ex.Exception.Message)"
+    }
+    else {
+        $warningMessage = "Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($ex.Exception)"
+        $auditMessage = "Error $($actionMessage). Error: $($ex.Exception)"
+    }
+    Write-Warning $warningMessage
+    Write-Error $auditMessage
+    # exit # use when using multiple try/catch and the script must stop
 }
-<#----- Exchange On-Premises: End -----#>
+finally {
+    # Disconnect from Exchange
+    # Docs: https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/remove-pssession
+    if ($null -ne $exchangeSession) {
+        try {
+            $deleteExchangeSessionSplatParams = @{
+                Session     = $exchangeSession
+                Confirm     = $false
+                ErrorAction = "Stop"
+            }
+            $null = Remove-PSSession @deleteExchangeSessionSplatParams
+        }
+        catch {
+            Write-Warning "Failed to disconnect from Exchange using URI [$ExchangeConnectionUri]. Error: $($_.Exception.Message)"
+        }
+    }
+}
 '@ 
 $tmpModel = @'
-[{"key":"name","type":0},{"key":"sAMAccountName","type":0}]
+[{"key":"Guid","type":0},{"key":"DisplayName","type":0},{"key":"PrimarySmtpAddress","type":0},{"key":"UserPrincipalName","type":0}]
 '@ 
 $tmpInput = @'
 []
 '@ 
 $dataSourceGuid_1 = [PSCustomObject]@{} 
 $dataSourceGuid_1_Name = @'
-Exchange-user-generate-table-distributiongroups-manage-memberships
+exchange-on-premises-distribution-group-manage-memberships | Exchange-On-Premises-Get-All-Users
 '@ 
-Invoke-HelloIDDatasource -DatasourceName $dataSourceGuid_1_Name -DatasourceType "4" -DatasourceInput $tmpInput -DatasourcePsScript $tmpPsScript -DatasourceModel $tmpModel -returnObject ([Ref]$dataSourceGuid_1) 
-<# End: DataSource "Exchange-user-generate-table-distributiongroups-manage-memberships" #>
+Invoke-HelloIDDatasource -DatasourceName $dataSourceGuid_1_Name -DatasourceType "4" -DatasourceInput $tmpInput -DatasourcePsScript $tmpPsScript -DatasourceModel $tmpModel -DataSourceRunInCloud "False" -returnObject ([Ref]$dataSourceGuid_1) 
+<# End: DataSource "exchange-on-premises-distribution-group-manage-memberships | Exchange-On-Premises-Get-All-Users" #>
 
-<# Begin: DataSource "Exchange-distributiongroup-generate-table-members" #>
+<# Begin: DataSource "exchange-on-premises-distribution-group-manage-memberships | Exchange-On-Premises-Get-GroupMembers" #>
 $tmpPsScript = @'
-<#----- Exchange On-Premises: Start -----#>
-# Connect to Exchange
-try{
-    $adminSecurePassword = ConvertTo-SecureString -String "$ExchangeAdminPassword" -AsPlainText -Force
-    $adminCredential = [System.Management.Automation.PSCredential]::new($ExchangeAdminUsername,$adminSecurePassword)
-    $sessionOption = New-PSSessionOption -SkipCACheck -SkipCNCheck #-SkipRevocationCheck
-    $exchangeSession = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri $exchangeConnectionUri -Credential $adminCredential -SessionOption $sessionOption -ErrorAction Stop 
-    #-AllowRedirection
-    $null = Import-PSSession $exchangeSession -DisableNameChecking -AllowClobber
-    Write-Information -Message "Successfully connected to Exchange using the URI [$exchangeConnectionUri]"
-} catch {
-    Write-Information -Message "Error connecting to Exchange using the URI [$exchangeConnectionUri]"
-    Write-Error -Message "Error at line: $($_.InvocationInfo.ScriptLineNumber - 79): $($_.Exception.Message)"
-    if($debug -eq $true){
-        Write-Error -Message "$($_.Exception)"
-    }
-    Write-Information -Message "Failed to connect to Exchange using the URI [$exchangeConnectionUri]"
-    throw $_
-}
+# Variables configured in form
+$group = $datasource.selectedGroup
 
-# Read current distribution group
-try{    
+# Global variables
+# Outcommented as these are set from Global Variables
+# $ExchangeConnectionUri = ""
+# $ExchangeAdminUsername = ""
+# $ExchangeAdminPassword = ""
+
+# Fixed values
+# Properties to select - Select only needed properties to limit memory usage and speed up processing
+$propertiesToSelect = @(
+    "Guid"
+    , "DisplayName"
+    , "PrimarySmtpAddress"    
+)
+
+# Enable TLS1.2
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
+
+# Set debug logging
+$VerbosePreference = "SilentlyContinue"
+$InformationPreference = "Continue"
+$WarningPreference = "Continue"
+
+#region functions
+#endregion functions
+
+try {
+    # Create credentials
+    $actionMessage = "creating credentials object"
     
-    $members = Get-DistributionGroupMember -Identity $datasource.selectedGroup.UserPrincipalName
-    Write-Information -Message "Found distribution group [$($datasource.selectedGroup.displayName)]"
+    $securePassword = ConvertTo-SecureString -String $ExchangeAdminPassword -AsPlainText -Force
+    $credential = [System.Management.Automation.PSCredential]::new($ExchangeAdminUsername, $securePassword)
+
+    # Connect to Exchange On-Premises
+    # Docs: https://learn.microsoft.com/en-us/powershell/exchange/connect-to-exchange-servers-using-remote-powershell
+    $actionMessage = "connecting to Exchange On-Premises using URI [$ExchangeConnectionUri]"
+
+    $sessionOptionParams = @{
+        SkipCACheck         = $false
+        SkipCNCheck         = $false
+        SkipRevocationCheck = $false
+    }
+
+    $sessionOption = New-PSSessionOption @sessionOptionParams
+
+    $sessionParams = @{
+        Authentication    = 'Default'
+        ConfigurationName = 'Microsoft.Exchange'
+        ConnectionUri     = $ExchangeConnectionUri
+        Credential        = $credential
+        SessionOption     = $sessionOption
+        ErrorAction       = "Stop"
+    }
+
+    $exchangeSession = New-PSSession @sessionParams
+    $null = Import-PSSession -Session $exchangeSession -DisableNameChecking -AllowClobber -CommandName "Get-DistributionGroupMember" -ErrorAction Stop
+
+    # Get Distribution Groups
+    # Docs: https://learn.microsoft.com/en-us/powershell/module/exchangepowershell/get-distributiongroup
+    $actionMessage = "querying members of Microsoft Entra ID Group [$($group.displayName)] with ID [$($group.id)]"
+
+    $getDistributionGroupParams = @{        
+        Identity = $($group.Guid)
+    }
+   
+    $distributionGroupMembers = Get-DistributionGroupMember @getDistributionGroupParams | Sort-Object -Property DisplayName
     
-    $members = $members | Sort-Object -Property Displayname
-    foreach($member in $members)
-    {
-        if($member.RecipientType -eq "UserMailbox")
-        {
-            $displayValue = $member.Displayname + " [" + $member.Samaccountname + "]"
-            $returnObject = @{sAMAccountName=$member.Samaccountname;name=$displayValue;}
-            Write-Output $returnObject
+     Write-Information "Queried members of Microsoft Entra ID Group [$($group.displayName)] with ID [$($group.id)]. Result count: $(($microsoftEntraIDGroupMembers | Measure-Object).Count)"
+
+    # Send results to HelloID
+    $actionMessage = "sending results to HelloID"
+    $distributionGroupMembers | Select-Object $propertiesToSelect | Sort-Object -Property displayName | ForEach-Object {
+        Write-Output $_
+    }
+}
+catch {
+    $ex = $PSItem
+    if (-not [string]::IsNullOrEmpty($ex.Exception.Message)) {
+        $warningMessage = "Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)"
+        $auditMessage = "Error $($actionMessage). Error: $($ex.Exception.Message)"
+    }
+    else {
+        $warningMessage = "Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($ex.Exception)"
+        $auditMessage = "Error $($actionMessage). Error: $($ex.Exception)"
+    }
+    Write-Warning $warningMessage
+    Write-Error $auditMessage
+    # exit # use when using multiple try/catch and the script must stop
+}
+finally {
+    # Disconnect from Exchange
+    # Docs: https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/remove-pssession
+    if ($null -ne $exchangeSession) {
+        try {
+            $deleteExchangeSessionSplatParams = @{
+                Session     = $exchangeSession
+                Confirm     = $false
+                ErrorAction = "Stop"
+            }
+            $null = Remove-PSSession @deleteExchangeSessionSplatParams
         }
-    }    
-    
-} catch {
-    Write-Information -Message "Could not find distribution group [$($datasource.selectedGroup.UserPrincipalName)]"
-    Write-Error -Message "Error at line: $($_.InvocationInfo.ScriptLineNumber - 79): $($_.Exception.Message)"
-    if($debug -eq $true){
-        Write-Information -Message "$($_.Exception)"
+        catch {
+            Write-Warning "Failed to disconnect from Exchange using URI [$ExchangeConnectionUri]. Error: $($_.Exception.Message)"
+        }
     }
-    Write-Information -Message "Failed to find distribution group [$($adUser.userPrincipalName)]"
-    throw $_
 }
-
-# Disconnect from Exchange
-try{
-    Remove-PsSession -Session $exchangeSession -Confirm:$false -ErrorAction Stop
-    Write-Information -Message "Successfully disconnected from Exchange"
-} catch {
-    Write-Error -Message "Error disconnecting from Exchange"
-    Write-Error -Message "Error at line: $($_.InvocationInfo.ScriptLineNumber - 79): $($_.Exception.Message)"
-    if($debug -eq $true){
-        Write-Error -Message "$($_.Exception)"
-    }    
-    Write-Error -Message "Failed to disconnect from Exchange"
-    throw $_
-}
-<#----- Exchange On-Premises: End -----#>
 '@ 
 $tmpModel = @'
-[{"key":"sAMAccountName","type":0},{"key":"name","type":0}]
+[{"key":"Guid","type":0},{"key":"DisplayName","type":0},{"key":"PrimarySmtpAddress","type":0},{"key":"UserPrincipalName","type":0}]
 '@ 
 $tmpInput = @'
 [{"description":null,"translateDescription":false,"inputFieldType":1,"key":"selectedGroup","type":0,"options":1}]
 '@ 
 $dataSourceGuid_2 = [PSCustomObject]@{} 
 $dataSourceGuid_2_Name = @'
-Exchange-distributiongroup-generate-table-members
+exchange-on-premises-distribution-group-manage-memberships | Exchange-On-Premises-Get-GroupMembers
 '@ 
-Invoke-HelloIDDatasource -DatasourceName $dataSourceGuid_2_Name -DatasourceType "4" -DatasourceInput $tmpInput -DatasourcePsScript $tmpPsScript -DatasourceModel $tmpModel -returnObject ([Ref]$dataSourceGuid_2) 
-<# End: DataSource "Exchange-distributiongroup-generate-table-members" #>
+Invoke-HelloIDDatasource -DatasourceName $dataSourceGuid_2_Name -DatasourceType "4" -DatasourceInput $tmpInput -DatasourcePsScript $tmpPsScript -DatasourceModel $tmpModel -DataSourceRunInCloud "False" -returnObject ([Ref]$dataSourceGuid_2) 
+<# End: DataSource "exchange-on-premises-distribution-group-manage-memberships | Exchange-On-Premises-Get-GroupMembers" #>
 
-<# Begin: DataSource "Exchange-distributiongroup-generate-table-wildcard" #>
+<# Begin: DataSource "exchange-on-premises-distribution-group-manage-memberships | Exchange-On-Premises-Get-DistributionGroup-Wildcard-Name-Description-Mail" #>
 $tmpPsScript = @'
-<#----- Exchange On-Premises: Start -----#>
-# Connect to Exchange
-try{
-    $adminSecurePassword = ConvertTo-SecureString -String "$ExchangeAdminPassword" -AsPlainText -Force
-    $adminCredential = [System.Management.Automation.PSCredential]::new($ExchangeAdminUsername,$adminSecurePassword)
-    $sessionOption = New-PSSessionOption -SkipCACheck -SkipCNCheck -SkipRevocationCheck
-    $exchangeSession = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri $exchangeConnectionUri -Credential $adminCredential -SessionOption $sessionOption -Authentication Default -ErrorAction Stop 
-    #-AllowRedirection
-    $null = Import-PSSession $exchangeSession -DisableNameChecking -AllowClobber
-    Write-Information -Message "Successfully connected to Exchange using the URI [$exchangeConnectionUri]"
-} catch {
-    Write-Information -Message "Error connecting to Exchange using the URI [$exchangeConnectionUri]"
-    Write-Error -Message "Error at line: $($_.InvocationInfo.ScriptLineNumber - 79): $($_.Exception.Message)"
-    if($debug -eq $true){
-        Write-Error -Message "$($_.Exception)"
-    }
-    Write-Information -Message "Failed to connect to Exchange using the URI [$exchangeConnectionUri]"
-    throw $_
+# Variables configured in form
+$searchValue = $datasource.searchValue
+if ($searchValue -eq "*") {
+    $filter = "*"
 }
+else {
+    $filter = "Alias -like '*$searchValue*' -or Name -like '*$searchValue*' -or SamAccountName -like '*$searchValue*' -or PrimarySmtpAddress -like '*$searchValue*'"
+}
+
+# Global variables
+# Outcommented as these are set from Global Variables
+# $ExchangeConnectionUri = ""
+# $ExchangeAdminUsername = ""
+# $ExchangeAdminPassword = ""
+
+# Fixed values
+# Properties to select - Select only needed properties to limit memory usage and speed up processing
+$propertiesToSelect = @(
+    "Guid"
+    , "DisplayName"
+    , "Name"
+    , "Alias"
+    , "PrimarySmtpAddress"
+    , "EmailAddresses"
+    , "DistinguishedName"    
+    , "Description"    
+)
+
+# Enable TLS1.2
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
+
+# Set debug logging
+$VerbosePreference = "SilentlyContinue"
+$InformationPreference = "Continue"
+$WarningPreference = "Continue"
+
+#region functions
+#endregion functions
 
 try {
-    $searchValue = $dataSource.searchValue
-    $searchQuery = "*$searchValue*"
+    # Create credentials
+    $actionMessage = "creating credentials object"
     
-    
-    if([String]::IsNullOrEmpty($searchValue) -eq $true){
-        Write-Information "Geen Searchvalue"
-        return
-    }else{
-        Write-Information "SearchQuery: $searchQuery"
-        
-        $distributionGroups = Get-DistributionGroup -filter "{alias -like '$searchQuery' -or name -like '$searchQuery'}" 
+    $securePassword = ConvertTo-SecureString -String $ExchangeAdminPassword -AsPlainText -Force
+    $credential = [System.Management.Automation.PSCredential]::new($ExchangeAdminUsername, $securePassword)
 
-        $distributionGroups = $distributionGroups | Sort-Object -Property DisplayName
-        $resultCount = @($distributionGroups).Count
-        Write-Information "Result count: $resultCount"
-        if($resultCount -gt 0){
-            foreach($distributionGroup in $distributionGroups){
-                $returnObject = @{displayName=$distributionGroup.DisplayName; UserPrincipalName=$distributionGroup.PrimarySMTPAddress}
-                Write-Output $returnObject
+    # Connect to Exchange On-Premises
+    # Docs: https://learn.microsoft.com/en-us/powershell/exchange/connect-to-exchange-servers-using-remote-powershell
+    $actionMessage = "connecting to Exchange On-Premises using URI [$ExchangeConnectionUri]"
+
+    $sessionOptionParams = @{
+        SkipCACheck         = $false
+        SkipCNCheck         = $false
+        SkipRevocationCheck = $false
+    }
+
+    $sessionOption = New-PSSessionOption @sessionOptionParams
+
+    $sessionParams = @{
+        Authentication    = 'Default'
+        ConfigurationName = 'Microsoft.Exchange'
+        ConnectionUri     = $ExchangeConnectionUri
+        Credential        = $credential
+        SessionOption     = $sessionOption
+        ErrorAction       = "Stop"
+    }
+
+    $exchangeSession = New-PSSession @sessionParams
+    $null = Import-PSSession -Session $exchangeSession -DisableNameChecking -AllowClobber -CommandName "Get-DistributionGroup" -ErrorAction Stop
+
+    # Get Distribution Groups
+    # Docs: https://learn.microsoft.com/en-us/powershell/module/exchangepowershell/get-distributiongroup
+    $actionMessage = "querying distribution groups that match filter [$($filter)]"
+
+    $getDistributionGroupParams = @{        
+        Filter = $filter           
+        ErrorAction = 'Stop'
+    }
+   
+    $distributionGroups = Get-DistributionGroup @getDistributionGroupParams | Select-Object -Property $propertiesToSelect   
+    Write-Information "Queried distribution groups that match filter [$($filter)]. Result count: $(($distributionGroups | Measure-Object).Count)"
+
+    # Sort and send results to HelloID
+    $actionMessage = "sending results to HelloID"
+    $distributionGroups | Sort-Object -Property DisplayName | ForEach-Object {
+        Write-Output $_
+    }  
+}
+catch {
+    $ex = $PSItem
+    if (-not [string]::IsNullOrEmpty($ex.Exception.Message)) {
+        $warningMessage = "Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)"
+        $auditMessage = "Error $($actionMessage). Error: $($ex.Exception.Message)"
+    }
+    else {
+        $warningMessage = "Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($ex.Exception)"
+        $auditMessage = "Error $($actionMessage). Error: $($ex.Exception)"
+    }
+    Write-Warning $warningMessage
+    Write-Error $auditMessage
+    # exit # use when using multiple try/catch and the script must stop
+}
+finally {
+    # Disconnect from Exchange
+    # Docs: https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/remove-pssession
+    if ($null -ne $exchangeSession) {
+        try {
+            $deleteExchangeSessionSplatParams = @{
+                Session     = $exchangeSession
+                Confirm     = $false
+                ErrorAction = "Stop"
             }
+            $null = Remove-PSSession @deleteExchangeSessionSplatParams
+        }
+        catch {
+            Write-Warning "Failed to disconnect from Exchange using URI [$ExchangeConnectionUri]. Error: $($_.Exception.Message)"
         }
     }
-} catch {
-    $msg = "Error searching distribution group [$searchValue]. Error: $($_.Exception.Message)"
-    Write-Error $msg
 }
-
-# Disconnect from Exchange
-try{
-    Remove-PsSession -Session $exchangeSession -Confirm:$false -ErrorAction Stop
-    Write-Information -Message "Successfully disconnected from Exchange"
-} catch {
-    Write-Error -Message "Error disconnecting from Exchange"
-    Write-Error -Message "Error at line: $($_.InvocationInfo.ScriptLineNumber - 79): $($_.Exception.Message)"
-    if($debug -eq $true){
-        Write-Error -Message "$($_.Exception)"
-    }    
-    Write-Error -Message "Failed to disconnect from Exchange"
-    throw $_
-}
-<#----- Exchange On-Premises: End -----#>
 '@ 
 $tmpModel = @'
-[{"key":"displayName","type":0},{"key":"UserPrincipalName","type":0}]
+[{"key":"Guid","type":0},{"key":"DisplayName","type":0},{"key":"Name","type":0},{"key":"Alias","type":0},{"key":"PrimarySmtpAddress","type":0},{"key":"EmailAddresses","type":0},{"key":"DistinguishedName","type":0},{"key":"Description","type":0}]
 '@ 
 $tmpInput = @'
 [{"description":null,"translateDescription":false,"inputFieldType":1,"key":"searchValue","type":0,"options":1}]
 '@ 
 $dataSourceGuid_0 = [PSCustomObject]@{} 
 $dataSourceGuid_0_Name = @'
-Exchange-distributiongroup-generate-table-wildcard
+exchange-on-premises-distribution-group-manage-memberships | Exchange-On-Premises-Get-DistributionGroup-Wildcard-Name-Description-Mail
 '@ 
-Invoke-HelloIDDatasource -DatasourceName $dataSourceGuid_0_Name -DatasourceType "4" -DatasourceInput $tmpInput -DatasourcePsScript $tmpPsScript -DatasourceModel $tmpModel -returnObject ([Ref]$dataSourceGuid_0) 
-<# End: DataSource "Exchange-distributiongroup-generate-table-wildcard" #>
+Invoke-HelloIDDatasource -DatasourceName $dataSourceGuid_0_Name -DatasourceType "4" -DatasourceInput $tmpInput -DatasourcePsScript $tmpPsScript -DatasourceModel $tmpModel -DataSourceRunInCloud "False" -returnObject ([Ref]$dataSourceGuid_0) 
+<# End: DataSource "exchange-on-premises-distribution-group-manage-memberships | Exchange-On-Premises-Get-DistributionGroup-Wildcard-Name-Description-Mail" #>
 <# End: HelloID Data sources #>
 
-<# Begin: Dynamic Form "Exchange on-premise - Manage memberships distribution group " #>
+<# Begin: Dynamic Form "Exchange On-Premises - Distribution Group - Manage memberships" #>
 $tmpSchema = @"
-[{"label":"Select group","fields":[{"key":"searchfield","templateOptions":{"label":"Search","placeholder":""},"type":"input","summaryVisibility":"Hide element","requiresTemplateOptions":true,"requiresKey":true},{"key":"gridGroups","templateOptions":{"label":"Select group","required":true,"grid":{"columns":[{"headerName":"Display Name","field":"displayName"},{"headerName":"Mail address","field":"UserPrincipalName"}],"height":300,"rowSelection":"single"},"dataSourceConfig":{"dataSourceGuid":"$dataSourceGuid_0","input":{"propertyInputs":[{"propertyName":"searchValue","otherFieldValue":{"otherFieldKey":"searchfield"}}]}},"useFilter":false},"type":"grid","summaryVisibility":"Show","requiresTemplateOptions":true,"requiresKey":true}]},{"label":"Members","fields":[{"key":"members","templateOptions":{"label":"Manage group memberships","required":false,"filterable":true,"useDataSource":true,"dualList":{"options":[{"guid":"75ea2890-88f8-4851-b202-626123054e14","Name":"Apple"},{"guid":"0607270d-83e2-4574-9894-0b70011b663f","Name":"Pear"},{"guid":"1ef6fe01-3095-4614-a6db-7c8cd416ae3b","Name":"Orange"}],"optionKeyProperty":"sAMAccountName","optionDisplayProperty":"name","labelLeft":"Available","labelRight":"Member of"},"dataSourceConfig":{"dataSourceGuid":"$dataSourceGuid_1","input":{"propertyInputs":[]}},"destinationDataSourceConfig":{"dataSourceGuid":"$dataSourceGuid_2","input":{"propertyInputs":[{"propertyName":"selectedGroup","otherFieldValue":{"otherFieldKey":"gridGroups"}}]}},"useFilter":false},"type":"duallist","summaryVisibility":"Show","sourceDataSourceIdentifierSuffix":"source-datasource","destinationDataSourceIdentifierSuffix":"destination-datasource","requiresTemplateOptions":true,"requiresKey":true}]}]
+[{"label":"Select group","fields":[{"key":"searchFieldGroup","templateOptions":{"label":"Search field (wildcard search in Display name, description and mail)","placeholder":"Display name, description or mail","required":true,"minLength":1},"type":"input","summaryVisibility":"Hide element","requiresTemplateOptions":true,"requiresKey":true,"requiresDataSource":false},{"key":"gridGroups","templateOptions":{"label":"Select group","required":true,"grid":{"columns":[{"headerName":"Display Name","field":"DisplayName"},{"headerName":"Description","field":"Description"},{"headerName":"Mail","field":"PrimarySmtpAddress"}],"height":300,"rowSelection":"single"},"dataSourceConfig":{"dataSourceGuid":"$dataSourceGuid_0","input":{"propertyInputs":[{"propertyName":"searchValue","otherFieldValue":{"otherFieldKey":"searchFieldGroup"}}]}},"useFilter":true,"allowCsvDownload":true},"type":"grid","summaryVisibility":"Show","requiresTemplateOptions":true,"requiresKey":true,"requiresDataSource":true}]},{"label":"Members","fields":[{"key":"members","templateOptions":{"label":"Manage group memberships","required":false,"filterable":true,"useDataSource":true,"dualList":{"options":[{"guid":"75ea2890-88f8-4851-b202-626123054e14","Name":"Apple"},{"guid":"0607270d-83e2-4574-9894-0b70011b663f","Name":"Pear"},{"guid":"1ef6fe01-3095-4614-a6db-7c8cd416ae3b","Name":"Orange"}],"optionKeyProperty":"Guid","optionDisplayProperty":"DisplayName","labelLeft":"All users","labelRight":"Current group members"},"dataSourceConfig":{"dataSourceGuid":"$dataSourceGuid_1","input":{"propertyInputs":[]}},"destinationDataSourceConfig":{"dataSourceGuid":"$dataSourceGuid_2","input":{"propertyInputs":[{"propertyName":"selectedGroup","otherFieldValue":{"otherFieldKey":"gridGroups"}}]}},"useFilter":false},"type":"duallist","summaryVisibility":"Show","sourceDataSourceIdentifierSuffix":"source-datasource","destinationDataSourceIdentifierSuffix":"destination-datasource","requiresTemplateOptions":true,"requiresKey":true,"requiresDataSource":false}]}]
 "@ 
 
 $dynamicFormGuid = [PSCustomObject]@{} 
 $dynamicFormName = @'
-Exchange on-premise - Manage memberships distribution group 
+Exchange On-Premises - Distribution Group - Manage memberships
 '@ 
 Invoke-HelloIDDynamicForm -FormName $dynamicFormName -FormSchema $tmpSchema  -returnObject ([Ref]$dynamicFormGuid) 
 <# END: Dynamic Form #>
 
 <# Begin: Delegated Form Access Groups and Categories #>
 $delegatedFormAccessGroupGuids = @()
-if(-not[String]::IsNullOrEmpty($delegatedFormAccessGroupNames)){
-    foreach($group in $delegatedFormAccessGroupNames) {
+if (-not[String]::IsNullOrEmpty($delegatedFormAccessGroupNames)) {
+    foreach ($group in $delegatedFormAccessGroupNames) {
         try {
-            $uri = ($script:PortalBaseUrl +"api/v1/groups/$group")
+            $uri = ($script:PortalBaseUrl + "api/v1/groups/$group")
             $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false
             $delegatedFormAccessGroupGuid = $response.groupGuid
             $delegatedFormAccessGroupGuids += $delegatedFormAccessGroupGuid
-            
+        
             Write-Information "HelloID (access)group '$group' successfully found$(if ($script:debugLogging -eq $true) { ": " + $delegatedFormAccessGroupGuid })"
-        } catch {
+        }
+        catch {
             Write-Error "HelloID (access)group '$group', message: $_"
         }
     }
-    if($null -ne $delegatedFormAccessGroupGuids){
+    if ($null -ne $delegatedFormAccessGroupGuids) {
         $delegatedFormAccessGroupGuids = ($delegatedFormAccessGroupGuids | Select-Object -Unique | ConvertTo-Json -Depth 100 -Compress)
     }
 }
 
 $delegatedFormCategoryGuids = @()
-foreach($category in $delegatedFormCategories) {
+foreach ($category in $delegatedFormCategories) {
     try {
-        $uri = ($script:PortalBaseUrl +"api/v1/delegatedformcategories/$category")
+        $uri = ($script:PortalBaseUrl + "api/v1/delegatedformcategories/$category")
         $response = Invoke-RestMethod -Method Get -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false
+        $response = $response | Where-Object { $_.name.en -eq $category }
+    
         $tmpGuid = $response.delegatedFormCategoryGuid
         $delegatedFormCategoryGuids += $tmpGuid
-        
+    
         Write-Information "HelloID Delegated Form category '$category' successfully found$(if ($script:debugLogging -eq $true) { ": " + $tmpGuid })"
-    } catch {
+    }
+    catch {
         Write-Warning "HelloID Delegated Form category '$category' not found"
         $body = @{
-            name = @{"en" = $category};
+            name = @{"en" = $category };
         }
         $body = ConvertTo-Json -InputObject $body -Depth 100
 
-        $uri = ($script:PortalBaseUrl +"api/v1/delegatedformcategories")
+        $uri = ($script:PortalBaseUrl + "api/v1/delegatedformcategories")
         $response = Invoke-RestMethod -Method Post -Uri $uri -Headers $script:headers -ContentType "application/json" -Verbose:$false -Body $body
         $tmpGuid = $response.delegatedFormCategoryGuid
         $delegatedFormCategoryGuids += $tmpGuid
@@ -642,12 +801,12 @@ $delegatedFormCategoryGuids = (ConvertTo-Json -InputObject $delegatedFormCategor
 <# End: Delegated Form Access Groups and Categories #>
 
 <# Begin: Delegated Form #>
-$delegatedFormRef = [PSCustomObject]@{guid = $null; created = $null} 
+$delegatedFormRef = [PSCustomObject]@{guid = $null; created = $null } 
 $delegatedFormName = @'
-Exchange on-premise - Manage memberships distribution group
+Exchange On-Premises - Distribution Group - Manage memberships
 '@
 $tmpTask = @'
-{"name":"Exchange on-premise - Manage memberships distribution group","script":"$VerbosePreference = \"SilentlyContinue\"\r\n$InformationPreference = \"Continue\"\r\n$WarningPreference = \"Continue\"\r\n\r\n# variables configured in form\r\n$groupName = $form.gridGroups.userPrincipalName\r\n$groupDisplayName = $form.gridGroups.displayName\r\n$usersToRemove = $form.members.rightToLeft\r\n$usersToAdd = $form.members.leftToRight\r\n\r\ntry {\r\n    \u003c#----- Exchange On-Premises: Start -----#\u003e\r\n    # Connect to Exchange\r\n    try {\r\n        $adminSecurePassword = ConvertTo-SecureString -String \"$ExchangeAdminPassword\" -AsPlainText -Force\r\n        $adminCredential = [System.Management.Automation.PSCredential]::new($ExchangeAdminUsername,$adminSecurePassword)\r\n        $sessionOption = New-PSSessionOption -SkipCACheck -SkipCNCheck -SkipRevocationCheck\r\n        $exchangeSession = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri $exchangeConnectionUri -Credential $adminCredential -SessionOption $sessionOption -ErrorAction Stop \r\n        #-AllowRedirection\r\n        $session = Import-PSSession $exchangeSession -DisableNameChecking -AllowClobber\r\n\r\n        Write-Information \"Successfully connected to Exchange using the URI [$exchangeConnectionUri]\" \r\n    \r\n        $Log = @{\r\n            Action            = \"UpdateResource\" # optional. ENUM (undefined = default) \r\n            System            = \"Exchange On-Premise\" # optional (free format text) \r\n            Message           = \"Successfully connected to Exchange using the URI [$exchangeConnectionUri]\" # required (free format text) \r\n            IsError           = $false # optional. Elastic reporting purposes only. (default = $false. $true = Executed action returned an error) \r\n            TargetDisplayName = $exchangeConnectionUri # optional (free format text) \r\n            TargetIdentifier  = $([string]$session.GUID) # optional (free format text) \r\n        }\r\n        #send result back  \r\n        Write-Information -Tags \"Audit\" -MessageData $log\r\n    }\r\n    catch {\r\n        Write-Error \"Error connecting to Exchange using the URI [$exchangeConnectionUri]. Error: $($_.Exception.Message)\"\r\n        $Log = @{\r\n            Action            = \"UpdateResource\" # optional. ENUM (undefined = default) \r\n            System            = \"Exchange On-Premise\" # optional (free format text) \r\n            Message           = \"Failed to connect to Exchange using the URI [$exchangeConnectionUri].\" # required (free format text) \r\n            IsError           = $true # optional. Elastic reporting purposes only. (default = $false. $true = Executed action returned an error) \r\n            TargetDisplayName = $exchangeConnectionUri # optional (free format text) \r\n            TargetIdentifier  = $([string]$session.GUID) # optional (free format text) \r\n        }\r\n        #send result back  \r\n        Write-Information -Tags \"Audit\" -MessageData $log\r\n    }\r\n\r\n    if ($usersToAdd.count -gt 0) {\r\n        try {\r\n            Write-Information \"Starting to add distribution group [$groupName] to users [$($usersToAdd.sAMAccountName)]\"\r\n            #$usersToAddJson = $usersToAdd | ConvertFrom-Json        \r\n            foreach ($user in $usersToAdd) {\r\n                try {\r\n                    Add-DistributionGroupMember -Identity $groupName -Member $user.sAMAccountName -Confirm:$false -ErrorAction Stop\r\n                    Write-Information \"Finished adding $($user.sAMAccountName) to distribution group [$groupName]\"\r\n                    $Log = @{\r\n                        Action            = \"UpdateResource\" # optional. ENUM (undefined = default) \r\n                        System            = \"Exchange On-Premise\" # optional (free format text) \r\n                        Message           = \"Successfully added [$($user.sAMAccountName)] to distribution group [$groupName]\" # required (free format text) \r\n                        IsError           = $false # optional. Elastic reporting purposes only. (default = $false. $true = Executed action returned an error) \r\n                        TargetDisplayName = $($user.name) # optional (free format text) \r\n                        TargetIdentifier  = $groupDisplayName # optional (free format text) \r\n                    }\r\n                    #send result back  \r\n                    Write-Information -Tags \"Audit\" -MessageData $log       \r\n                }\r\n                catch {\r\n                    Write-Error \"Error adding $($user.name) to distribution group [$groupName]. Error: $($_.Exception.Message)\" \r\n                    $Log = @{\r\n                        Action            = \"UpdateResource\" # optional. ENUM (undefined = default) \r\n                        System            = \"Exchange On-Premise\" # optional (free format text) \r\n                        Message           = \"Failed to add [$($user.sAMAccountName)] to distribution group [$groupName]\" # required (free format text) \r\n                        IsError           = $true # optional. Elastic reporting purposes only. (default = $false. $true = Executed action returned an error) \r\n                        TargetDisplayName = $($user.name) # optional (free format text) \r\n                        TargetIdentifier  = $groupDisplayName # optional (free format text) \r\n                    }\r\n                    #send result back  \r\n                    Write-Information -Tags \"Audit\" -MessageData $log                    \r\n                }                         \r\n            }                        \r\n        }\r\n        catch {\r\n            Write-Error \"Could not add distribution group [$groupName] to users [$($usersToAdd.sAMAccountName)]. Error: $($_.Exception.Message)\"\r\n            $Log = @{\r\n                Action            = \"UpdateResource\" # optional. ENUM (undefined = default) \r\n                System            = \"Exchange On-Premise\" # optional (free format text) \r\n                Message           = \"Failed to add distribution group [$groupName] to users [$($usersToAdd.sAMAccountName)]\" # required (free format text) \r\n                IsError           = $true # optional. Elastic reporting purposes only. (default = $false. $true = Executed action returned an error) \r\n                TargetDisplayName = $($usersToAdd.name) # optional (free format text) \r\n                TargetIdentifier  = $groupDisplayName # optional (free format text) \r\n            }\r\n            #send result back  \r\n            Write-Information -Tags \"Audit\" -MessageData $log            \r\n        }\r\n    }\r\n\r\n\r\n    if ($usersToRemove.count -gt 0) {\r\n        try {\r\n            Write-Information \"Starting to remove distribution group [$groupName] from users [$($usersToRemove.sAMAccountName)]\"\r\n            #$usersToRemoveJson = $usersToRemove | ConvertFrom-Json            \r\n            foreach ($user in $usersToRemove) {\r\n                try {\r\n                    Remove-DistributionGroupMember -Identity $groupName -Member $user.sAMAccountName -Confirm:$false -ErrorAction Stop\r\n                    Write-Information \"Finished removing  [$($user.name)] from distribution group [$groupName]\" \r\n                    $Log = @{\r\n                        Action            = \"UpdateResource\" # optional. ENUM (undefined = default) \r\n                        System            = \"Exchange On-Premise\" # optional (free format text) \r\n                        Message           = \"Successfully removed [$($user.sAMAccountName)] from distribution group [$groupName]\" # required (free format text) \r\n                        IsError           = $false # optional. Elastic reporting purposes only. (default = $false. $true = Executed action returned an error) \r\n                        TargetDisplayName = $($user.name) # optional (free format text) \r\n                        TargetIdentifier  = $groupDisplayName # optional (free format text) \r\n                    }\r\n                    #send result back  \r\n                    Write-Information -Tags \"Audit\" -MessageData $log                    \r\n                }\r\n                catch {\r\n                    Write-Error \"Failed to remove  [$($user.sAMAccountName)] from distribution group [$groupName]. Error: $($_.Exception.Message)\" \r\n                    $Log = @{\r\n                        Action            = \"UpdateResource\" # optional. ENUM (undefined = default) \r\n                        System            = \"Exchange On-Premise\" # optional (free format text) \r\n                        Message           = \"Failed to remove  [$($user.sAMAccountName)] from distribution group [$groupName]\" # required (free format text) \r\n                        IsError           = $true # optional. Elastic reporting purposes only. (default = $false. $true = Executed action returned an error) \r\n                        TargetDisplayName = $($user.name) # optional (free format text) \r\n                        TargetIdentifier  = $groupDisplayName # optional (free format text) \r\n                    }\r\n                    #send result back  \r\n                    Write-Information -Tags \"Audit\" -MessageData $log \r\n                }\r\n            }\r\n        }\r\n        catch {\r\n            Write-Error \"Could not remove distribution group [$groupName] from users [$($usersToRemove.sAMAccountName)] Error: $($_.Exception.Message)\"            \r\n            $Log = @{\r\n                Action            = \"UpdateResource\" # optional. ENUM (undefined = default) \r\n                System            = \"Exchange On-Premise\" # optional (free format text) \r\n                Message           = \"Failed to remove distribution group [$groupName] from users [$($usersToRemove.sAMAccountName)]\" # required (free format text) \r\n                IsError           = $true # optional. Elastic reporting purposes only. (default = $false. $true = Executed action returned an error) \r\n                TargetDisplayName = $($usersToRemove.name) # optional (free format text) \r\n                TargetIdentifier  = $groupDisplayName # optional (free format text) \r\n            }\r\n            #send result back  \r\n            Write-Information -Tags \"Audit\" -MessageData $log            \r\n        }    \r\n    }\r\n}\r\ncatch {\r\n    Write-Error \"Could not set memberships on distribution group [$($groupName)]. Error: $($_.Exception.Message)\"    \r\n    $Log = @{\r\n        Action            = \"UpdateResource\" # optional. ENUM (undefined = default) \r\n        System            = \"Exchange On-Premise\" # optional (free format text) \r\n        Message           = \"Failed setting memberships on distribution group [$groupName].\" # required (free format text) \r\n        IsError           = $true # optional. Elastic reporting purposes only. (default = $false. $true = Executed action returned an error) \r\n        TargetDisplayName = $groupDisplayName # optional (free format text) \r\n        TargetIdentifier  = $groupName # optional (free format text) \r\n    }\r\n    #send result back  \r\n    Write-Information -Tags \"Audit\" -MessageData $log\r\n}\r\nfinally {\r\n    # Disconnect from Exchange\r\n    try {\r\n        Remove-PsSession -Session $exchangeSession -Confirm:$false -ErrorAction Stop\r\n        Write-Information \"Successfully disconnected from Exchange using the URI [$exchangeConnectionUri]\"     \r\n        $Log = @{\r\n            Action            = \"UpdateResource\" # optional. ENUM (undefined = default) \r\n            System            = \"Exchange On-Premise\" # optional (free format text) \r\n            Message           = \"Successfully disconnected from Exchange using the URI [$exchangeConnectionUri]\" # required (free format text) \r\n            IsError           = $false # optional. Elastic reporting purposes only. (default = $false. $true = Executed action returned an error) \r\n            TargetDisplayName = $exchangeConnectionUri # optional (free format text) \r\n            TargetIdentifier  = $([string]$session.GUID) # optional (free format text) \r\n        }\r\n        #send result back  \r\n        Write-Information -Tags \"Audit\" -MessageData $log\r\n    }\r\n    catch {\r\n        Write-Error \"Error disconnecting from Exchange.  Error: $($_.Exception.Message)\"\r\n        $Log = @{\r\n            Action            = \"UpdateResource\" # optional. ENUM (undefined = default) \r\n            System            = \"Exchange On-Premise\" # optional (free format text) \r\n            Message           = \"Failed to disconnect from Exchange using the URI [$exchangeConnectionUri].\" # required (free format text) \r\n            IsError           = $true # optional. Elastic reporting purposes only. (default = $false. $true = Executed action returned an error) \r\n            TargetDisplayName = $exchangeConnectionUri # optional (free format text) \r\n            TargetIdentifier  = $([string]$session.GUID) # optional (free format text) \r\n        }\r\n        #send result back  \r\n        Write-Information -Tags \"Audit\" -MessageData $log \r\n    }\r\n    \u003c#----- Exchange On-Premises: End -----#\u003e\r\n}\r\n\r\n","runInCloud":false}
+{"name":"Exchange On-Premises - Distribution Group - Manage memberships","script":"# variables configured in form\r\n$group = $form.gridGroups\r\n$usersToRemove = $form.members.rightToLeft\r\n$usersToAdd = $form.members.leftToRight\r\n\r\n# Global variables\r\n# Outcommented as these are set from Global Variables\r\n# $ExchangeConnectionUri = \"\"\r\n# $ExchangeAdminUsername = \"\"\r\n# $ExchangeAdminPassword = \"\"\r\n\r\n# PowerShell commands to import\r\n$commands = @(\r\n    \"Add-DistributionGroupMember\"\r\n    , \"Remove-DistributionGroupMember\"\r\n)\r\n\r\n# Enable TLS1.2\r\n[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12\r\n\r\n# Set debug logging\r\n$VerbosePreference = \"SilentlyContinue\"\r\n$InformationPreference = \"Continue\"\r\n$WarningPreference = \"Continue\"\r\n\r\ntry {\r\n    # Create credentials\r\n    $actionMessage = \"creating credentials object\"\r\n    \r\n    $securePassword = ConvertTo-SecureString -String $ExchangeAdminPassword -AsPlainText -Force\r\n    $credential = [System.Management.Automation.PSCredential]::new($ExchangeAdminUsername, $securePassword)\r\n    \r\n    Write-Verbose \"Created credentials for user [$ExchangeAdminUsername]\"\r\n\r\n    # Connect to Exchange On-Premises\r\n    # Docs: https://learn.microsoft.com/en-us/powershell/exchange/connect-to-exchange-servers-using-remote-powershell\r\n    $actionMessage = \"connecting to Exchange On-Premises\"\r\n\r\n    $sessionOptionParams = @{\r\n        SkipCACheck         = $false\r\n        SkipCNCheck         = $false\r\n        SkipRevocationCheck = $false\r\n    }\r\n\r\n    $sessionOption = New-PSSessionOption @sessionOptionParams\r\n\r\n    $sessionParams = @{\r\n        Authentication    = \u0027Default\u0027\r\n        ConfigurationName = \u0027Microsoft.Exchange\u0027\r\n        Credential        = $credential\r\n        ConnectionUri     = $ExchangeConnectionUri\r\n        SessionOption     = $sessionOption\r\n        ErrorAction       = \"Stop\"\r\n    }\r\n\r\n    $exchangeSession = New-PSSession @sessionParams\r\n    $null = Import-PSSession -Session $exchangeSession -DisableNameChecking -AllowClobber -CommandName $commands -ErrorAction Stop\r\n\r\n    # Send initial audit log\r\n    $Log = @{\r\n        Action            = \"UpdateResource\" # optional. ENUM (undefined = default) \r\n        System            = \"Exchange On-Premises\" # optional (free format text) \r\n        Message           = \"Successfully connected to Exchange using URI [$ExchangeConnectionUri]\" # required (free format text) \r\n        IsError           = $false # optional. Elastic reporting purposes only. (default = $false. $true = Executed action returned an error) \r\n        TargetDisplayName = $ExchangeConnectionUri # optional (free format text) \r\n        TargetIdentifier  = $([string]$exchangeSession.InstanceId) # optional (free format text) \r\n    }\r\n    Write-Information -Tags \"Audit\" -MessageData $log\r\n\r\n    if ($usersToAdd.count -gt 0) {\r\n        # Add members\r\n        $actionMessage = \"adding users as member to group with displayName [$($group.DisplayName)] and id [$($group.Guid)]\"\r\n        foreach ($userToAdd in $usersToAdd) {\r\n            try {\r\n                # Add member to group\r\n                # docs: https://learn.microsoft.com/en-us/powershell/module/exchangepowershell/add-distributiongroupmember?view=exchange-ps\r\n                $actionMessage = \"adding user with displayName [$($userToAdd.displayName)] and id [$($userToAdd.Guid)] as member to group with displayName [$($group.displayName)] and id [$($group.Guid)]\"\r\n           \r\n                $addGroupMemberSplatParams = @{\r\n                    Identity    = $group.Guid\r\n                    Member      = $userToAdd.Guid                    \r\n                    Confirm     = $false\r\n                    ErrorAction = \"Stop\"\r\n                    Verbose     = $false\r\n                }\r\n                    \r\n                $addGroupMemberResponse = Add-DistributionGroupMember @addGroupMemberSplatParams\r\n\r\n                $Log = @{\r\n                    Action            = \"GrantMembership\" # optional. ENUM (undefined = default) \r\n                    System            = \"Exchange On-Premises\" # optional (free format text) \r\n                    Message           = \"Added user with displayName [$($userToAdd.displayName)] and id [$($userToAdd.Guid)] as member to group with displayName [$($group.displayName)] and id [$($group.Guid)].\" # required (free format text) \r\n                    IsError           = $false # optional. Elastic reporting purposes only. (default = $false. $true = Executed action returned an error) \r\n                    TargetDisplayName = $group.DisplayName # optional (free format text) \r\n                    TargetIdentifier  = $group.Guid # optional (free format text) \r\n                }\r\n                #send result back  \r\n                Write-Information -Tags \"Audit\" -MessageData $log\r\n            }\r\n            catch {\r\n                $ex = $PSItem\r\n                if (-not [string]::IsNullOrEmpty($ex.Exception.Data.RemoteException.Message)) {\r\n                    $auditMessage = \"Error $($actionMessage). Error: $($ex.Exception.Data.RemoteException.Message)\"\r\n                    $warningMessage = \"Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($ex.Exception.Data.RemoteException.Message)\"\r\n                }\r\n                else {\r\n                    $auditMessage = \"Error $($actionMessage). Error: $($ex.Exception.Message)\"\r\n                    $warningMessage = \"Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)\"\r\n                }\r\n\r\n                if ($ex.Exception.Message -like \"*already present in the collection*\") {\r\n                    # Send auditlog to HelloID    \r\n                    $Log = @{\r\n                        Action            = \"GrantMembership\" # optional. ENUM (undefined = default) \r\n                        System            = \"Exchange On-Premises\" # optional (free format text) \r\n                        Message           = \"Skipped $($actionMessage). Reason: User is already a member.\" # required (free format text) \r\n                        IsError           = $false # optional. Elastic reporting purposes only. (default = $false. $true = Executed action returned an error) \r\n                        TargetDisplayName = $group.displayName # optional (free format text)\r\n                        TargetIdentifier  = $group.Guid # optional (free format text)\r\n                    }\r\n                    Write-Information -Tags \"Audit\" -MessageData $log\r\n                }\r\n                else {\r\n                    # Send auditlog to HelloID   \r\n                    $Log = @{\r\n                        Action            = \"GrantMembership\" # optional. ENUM (undefined = default) \r\n                        System            = \"Exchange On-Premises\" # optional (free format text) \r\n                        Message           = $auditMessage # required (free format text) \r\n                        IsError           = $true # optional. Elastic reporting purposes only. (default = $false. $true = Executed action returned an error) \r\n                        TargetDisplayName = $group.displayName # optional (free format text)\r\n                        TargetIdentifier  = $group.Guid # optional (free format text)\r\n                    }\r\n                    Write-Information -Tags \"Audit\" -MessageData $log\r\n                    Write-Warning $warningMessage\r\n                    Write-Error $auditMessage\r\n                }\r\n            }\r\n        }\r\n    }\r\n\r\n\r\n    if ($usersToRemove.count -gt 0) {\r\n        # Remove members\r\n        $actionMessage = \"removing users as member from group with displayName [$($group.displayName)] and id [$($group.Guid)]\"\r\n        foreach ($userToRemove in $usersToRemove) {\r\n            try {\r\n                # Remove member from group\r\n                # docs: https://learn.microsoft.com/en-us/powershell/module/exchange/remove-distributiongroupmember?view=exchange-ps\r\n                $actionMessage = \"removing user with displayName [$($userToRemove.displayName)] and id [$($userToRemove.Guid)] as member from group with displayName [$($group.displayName)] and id [$($group.Guid)]\"\r\n            \r\n                    \r\n                $removeGroupMemberSplatParams = @{\r\n                    Identity                        = $group.Guid\r\n                    Member                          = $userToRemove.Guid\r\n                    BypassSecurityGroupManagerCheck = $true\r\n                    Confirm                         = $false\r\n                    ErrorAction                     = \"Stop\"\r\n                    Verbose                         = $false\r\n                }\r\n\r\n                $removeGroupMemberResponse = Remove-DistributionGroupMember @removeGroupMemberSplatParams\r\n                        \r\n                $Log = @{\r\n                    Action            = \"RevokeMembership\" # optional. ENUM (undefined = default) \r\n                    System            = \"Exchange On-Premises\" # optional (free format text) \r\n                    Message           = \"Removed user with displayName [$($userToRemove.displayName)] and id [$($userToRemove.Guid)] as member from group with displayName [$($group.displayName)] and id [$($group.Guid)].\" # required (free format text) \r\n                    IsError           = $false # optional. Elastic reporting purposes only. (default = $false. $true = Executed action returned an error) \r\n                    TargetDisplayName = $group.DisplayName # optional (free format text) \r\n                    TargetIdentifier  = $group.Guid # optional (free format text) \r\n                }\r\n                #send result back  \r\n                Write-Information -Tags \"Audit\" -MessageData $log                    \r\n            }                           \r\n            catch {\r\n                $ex = $PSItem\r\n                if (-not [string]::IsNullOrEmpty($ex.Exception.Data.RemoteException.Message)) {\r\n                    $auditMessage = \"Error $($actionMessage). Error: $($ex.Exception.Data.RemoteException.Message)\"\r\n                    $warningMessage = \"Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($ex.Exception.Data.RemoteException.Message)\"\r\n                }\r\n                else {\r\n                    $auditMessage = \"Error $($actionMessage). Error: $($ex.Exception.Message)\"\r\n                    $warningMessage = \"Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)\"\r\n                }\r\n                if ($ex.Exception.Message -like \"*isn\u0027t a member of the group*\") {\r\n                    # Send auditlog to HelloID   \r\n                    $Log = @{\r\n                        Action            = \"RevokeMembership\" # optional. ENUM (undefined = default) \r\n                        System            = \"Exchange On-Premises\" # optional (free format text) \r\n                        Message           = \"Skipped $($actionMessage). Reason: User is already no longer a member.\" # required (free format text) \r\n                        IsError           = $false # optional. Elastic reporting purposes only. (default = $false. $true = Executed action returned an error) \r\n                        TargetDisplayName = $group.displayName # optional (free format text)\r\n                        TargetIdentifier  = $group.Guid # optional (free format text)\r\n                    }\r\n                    Write-Information -Tags \"Audit\" -MessageData $log\r\n                }                \r\n                else {\r\n                    # Send auditlog to HelloID   \r\n                    $Log = @{\r\n                        Action            = \"RevokeMembership\" # optional. ENUM (undefined = default) \r\n                        System            = \"Exchange On-Premises\" # optional (free format text) \r\n                        Message           = $auditMessage # required (free format text) \r\n                        IsError           = $true # optional. Elastic reporting purposes only. (default = $false. $true = Executed action returned an error) \r\n                        TargetDisplayName = $group.displayName # optional (free format text)\r\n                        TargetIdentifier  = $group.Guid # optional (free format text)\r\n                    }\r\n                    Write-Information -Tags \"Audit\" -MessageData $log\r\n                    Write-Warning $warningMessage\r\n                    Write-Error $auditMessage\r\n                }\r\n            }\r\n        }\r\n    }\r\n}\r\ncatch {\r\n    $ex = $PSItem\r\n    if (-not [string]::IsNullOrEmpty($ex.Exception.Message)) {\r\n        $warningMessage = \"Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)\"\r\n        $auditMessage = \"Error $($actionMessage). Error: $($ex.Exception.Message)\"\r\n    }\r\n    else {\r\n        $warningMessage = \"Error at Line [$($ex.InvocationInfo.ScriptLineNumber)]: $($ex.InvocationInfo.Line). Error: $($ex.Exception)\"\r\n        $auditMessage = \"Error $($actionMessage). Error: $($ex.Exception)\"\r\n    }\r\n\r\n    # Send error audit log to HelloID\r\n    $Log = @{\r\n        Action            = \"UpdateResource\" # optional. ENUM (undefined = default) \r\n        System            = \"Exchange On-Premises\" # optional (free format text) \r\n        Message           = $auditMessage # required (free format text) \r\n        IsError           = $true # optional. Elastic reporting purposes only. (default = $false. $true = Executed action returned an error) \r\n        TargetDisplayName = $mailbox.DisplayName # optional (free format text) \r\n        TargetIdentifier  = $mailbox.PrimarySmtpAddress # optional (free format text) \r\n    }\r\n    \r\n    Write-Information -Tags \"Audit\" -MessageData $log\r\n    Write-Warning $warningMessage\r\n    Write-Error $auditMessage\r\n}\r\nfinally {\r\n    # Disconnect from Exchange\r\n    # Docs: https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/remove-pssession\r\n    if ($null -ne $exchangeSession) {\r\n        try {\r\n            $deleteExchangeSessionSplatParams = @{\r\n                Session     = $exchangeSession\r\n                Confirm     = $false\r\n                ErrorAction = \"Stop\"\r\n            }\r\n            $null = Remove-PSSession @deleteExchangeSessionSplatParams\r\n\r\n            # Send disconnect audit log\r\n            $Log = @{\r\n                Action            = \"UpdateResource\" # optional. ENUM (undefined = default) \r\n                System            = \"Exchange On-Premises\" # optional (free format text) \r\n                Message           = \"Successfully disconnected from Exchange using URI [$ExchangeConnectionUri]\" # required (free format text) \r\n                IsError           = $false # optional. Elastic reporting purposes only. (default = $false. $true = Executed action returned an error) \r\n                TargetDisplayName = $ExchangeConnectionUri # optional (free format text) \r\n                TargetIdentifier  = $([string]$exchangeSession.InstanceId) # optional (free format text) \r\n            }\r\n            Write-Information -Tags \"Audit\" -MessageData $log\r\n        }\r\n        catch {\r\n            Write-Warning \"Failed to disconnect from Exchange using URI [$ExchangeConnectionUri]. Error: $($_.Exception.Message)\"\r\n        }\r\n    }\r\n}\r\n\r\n","runInCloud":false}
 '@ 
 
 Invoke-HelloIDDelegatedForm -DelegatedFormName $delegatedFormName -DynamicFormGuid $dynamicFormGuid -AccessGroups $delegatedFormAccessGroupGuids -Categories $delegatedFormCategoryGuids -UseFaIcon "True" -FaIcon "fa fa-users" -task $tmpTask -returnObject ([Ref]$delegatedFormRef) 
