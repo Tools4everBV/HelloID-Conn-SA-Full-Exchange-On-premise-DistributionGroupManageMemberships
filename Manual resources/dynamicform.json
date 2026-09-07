@@ -3,15 +3,18 @@
         "label":  "Select group",
         "fields":  [
                        {
-                           "key":  "searchfield",
+                           "key":  "searchFieldGroup",
                            "templateOptions":  {
-                                                   "label":  "Search",
-                                                   "placeholder":  ""
+                                                   "label":  "Search field (wildcard search in Display name, description and mail)",
+                                                   "placeholder":  "Display name, description or mail",
+                                                   "required":  true,
+                                                   "minLength":  1
                                                },
                            "type":  "input",
                            "summaryVisibility":  "Hide element",
                            "requiresTemplateOptions":  true,
-                           "requiresKey":  true
+                           "requiresKey":  true,
+                           "requiresDataSource":  false
                        },
                        {
                            "key":  "gridGroups",
@@ -22,11 +25,15 @@
                                                                 "columns":  [
                                                                                 {
                                                                                     "headerName":  "Display Name",
-                                                                                    "field":  "displayName"
+                                                                                    "field":  "DisplayName"
                                                                                 },
                                                                                 {
-                                                                                    "headerName":  "Mail address",
-                                                                                    "field":  "UserPrincipalName"
+                                                                                    "headerName":  "Description",
+                                                                                    "field":  "Description"
+                                                                                },
+                                                                                {
+                                                                                    "headerName":  "Mail",
+                                                                                    "field":  "PrimarySmtpAddress"
                                                                                 }
                                                                             ],
                                                                 "height":  300,
@@ -39,18 +46,20 @@
                                                                                                                  {
                                                                                                                      "propertyName":  "searchValue",
                                                                                                                      "otherFieldValue":  {
-                                                                                                                                             "otherFieldKey":  "searchfield"
+                                                                                                                                             "otherFieldKey":  "searchFieldGroup"
                                                                                                                                          }
                                                                                                                  }
                                                                                                              ]
                                                                                       }
                                                                         },
-                                                   "useFilter":  false
+                                                   "useFilter":  true,
+                                                   "allowCsvDownload":  true
                                                },
                            "type":  "grid",
                            "summaryVisibility":  "Show",
                            "requiresTemplateOptions":  true,
-                           "requiresKey":  true
+                           "requiresKey":  true,
+                           "requiresDataSource":  true
                        }
                    ]
     },
@@ -79,10 +88,10 @@
                                                                                         "Name":  "Orange"
                                                                                     }
                                                                                 ],
-                                                                    "optionKeyProperty":  "sAMAccountName",
-                                                                    "optionDisplayProperty":  "name",
-                                                                    "labelLeft":  "Available",
-                                                                    "labelRight":  "Member of"
+                                                                    "optionKeyProperty":  "Guid",
+                                                                    "optionDisplayProperty":  "DisplayName",
+                                                                    "labelLeft":  "All users",
+                                                                    "labelRight":  "Current group members"
                                                                 },
                                                    "dataSourceConfig":  {
                                                                             "dataSourceGuid":  "$dataSourceGuid_1",
@@ -112,7 +121,8 @@
                            "sourceDataSourceIdentifierSuffix":  "source-datasource",
                            "destinationDataSourceIdentifierSuffix":  "destination-datasource",
                            "requiresTemplateOptions":  true,
-                           "requiresKey":  true
+                           "requiresKey":  true,
+                           "requiresDataSource":  false
                        }
                    ]
     }
